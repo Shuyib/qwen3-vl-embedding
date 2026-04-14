@@ -371,6 +371,47 @@ python demo_launcher.py
 
 **Flow**: Index files → Generate embeddings → Store locally → Query → Rank by similarity → Display results
 
+### Benchmarking File Type Detection
+
+`benchmark_file_detection.py` measures how many indexable files content-based
+detection finds that extension-only detection misses — the main practical
+difference vs a simple `find` + extension filter.
+
+```bash
+# Basic: compare extension vs Magika on a directory
+python benchmark_file_detection.py /path/to/your/repo --show-missed
+
+# Also compare against the Unix `file` command
+python benchmark_file_detection.py /path/to/your/repo --show-missed --compare-file-cmd
+```
+
+**Sample output:**
+
+```
+Extension-based detection
+  Total files scanned : 4,821
+  Indexed (supported) : 1,203  (24.9%)
+  Skipped (no match)  : 3,618
+  Time                : 12.4 ms
+
+Magika (content-based) detection
+  Indexed (supported) : 1,471  (30.5%)
+  Time                : 3,241.0 ms
+
+Delta (Magika vs extension-only)
+  Additional files found by Magika : +268  (+22.3% relative to extension baseline)
+
+  Sample gained files:
+    [dockerfile          ] Dockerfile
+    [shell               ] scripts/bootstrap
+    [makefile            ] Makefile
+    [python              ] tools/generate_schema
+```
+
+Run it on a real developer repository (Linux kernel, CPython, your own
+projects) for a meaningful signal. Generic document directories show less gain
+than code-heavy repos.
+
 ### Full Documentation
 
 See [LAUNCHER_README.md](LAUNCHER_README.md) for:
