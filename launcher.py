@@ -21,8 +21,8 @@ except ImportError:
     EMBEDDER_AVAILABLE = False
 
 from src.launcher.indexer import FileIndexer
+from src.launcher.file_type_detector import make_file_type_detector
 from src.launcher.search_engine import SearchEngine
-from src.launcher.ui import LauncherUI
 
 # Setup logging
 logging.basicConfig(
@@ -37,18 +37,31 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description="Multimodal File Launcher - Search files using natural language or images"
     )
+    model_parser = argparse.ArgumentParser(add_help=False)
+    model_parser.add_argument('--model', type=str, default='Qwen/Qwen3-VL-Embedding-2B',
+                              help='Model name, path, or GGUF file path')
+    model_parser.add_argument('--device', type=str, default='cuda' if TORCH_AVAILABLE and torch.cuda.is_available() else 'cpu',
+                              help='Device to run on (cuda/cpu)')
+    model_parser.add_argument('--quantized', action='store_true',
+                              help='Use quantized GGUF model (auto-detected for .gguf files)')
     
     # Subcommands
     subparsers = parser.add_subparsers(dest='command', help='Command to run')
     
     # Index command
-    index_parser = subparsers.add_parser('index', help='Index files in a directory')
+    index_parser = subparsers.add_parser('index', parents=[model_parser], help='Index files in a directory')
     index_parser.add_argument('directory', type=str, help='Directory to index')
     index_parser.add_argument('--no-recursive', action='store_true', help='Do not index subdirectories')
     index_parser.add_argument('--index-dir', type=str, default='.file_launcher_index', help='Index directory')
+    index_parser.add_argument(
+        '--file-type-detector',
+        choices=['auto', 'extension', 'magika'],
+        default='auto',
+        help='File type detection mode for indexing (default: auto)',
+    )
     
     # Launch command
-    launch_parser = subparsers.add_parser('launch', help='Launch the search UI')
+    launch_parser = subparsers.add_parser('launch', parents=[model_parser], help='Launch the search UI')
     launch_parser.add_argument('--index-dir', type=str, default='.file_launcher_index', help='Index directory')
     launch_parser.add_argument('--port', type=int, default=7860, help='Server port')
     launch_parser.add_argument('--share', action='store_true', help='Create a public link')
@@ -62,14 +75,6 @@ def parse_args():
     # Info command
     info_parser = subparsers.add_parser('info', help='Show index information')
     info_parser.add_argument('--index-dir', type=str, default='.file_launcher_index', help='Index directory')
-    
-    # Model arguments (common)
-    parser.add_argument('--model', type=str, default='Qwen/Qwen3-VL-Embedding-2B',
-                       help='Model name, path, or GGUF file path')
-    parser.add_argument('--device', type=str, default='cuda' if TORCH_AVAILABLE and torch.cuda.is_available() else 'cpu',
-                       help='Device to run on (cuda/cpu)')
-    parser.add_argument('--quantized', action='store_true',
-                       help='Use quantized GGUF model (auto-detected for .gguf files)')
     
     return parser.parse_args()
 
@@ -170,7 +175,8 @@ def load_embedder(model_name_or_path: str, device: str, use_quantized: bool = Fa
 def command_index(args):
     """Handle the index command."""
     embedder = load_embedder(args.model, args.device, args.quantized)
-    indexer = FileIndexer(embedder, args.index_dir)
+    file_type_detector = make_file_type_detector(args.file_type_detector)
+    indexer = FileIndexer(embedder, args.index_dir, file_type_detector=file_type_detector)
     
     logger.info(f"Indexing directory: {args.directory}")
     indexer.index_directory(args.directory, recursive=not args.no_recursive)
@@ -179,6 +185,13 @@ def command_index(args):
 
 def command_launch(args):
     """Handle the launch command."""
+    try:
+        from src.launcher.ui import LauncherUI
+    except ImportError as e:
+        logger.error(f"Launcher UI dependencies are not available: {e}")
+        logger.error("Install launcher UI dependencies with: uv pip install gradio")
+        sys.exit(1)
+
     embedder = load_embedder(args.model, args.device, args.quantized)
     indexer = FileIndexer(embedder, args.index_dir)
     

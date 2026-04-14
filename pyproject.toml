@@ -26,6 +26,14 @@ dependencies = [
     "llama-cpp-python>=0.3.0",
 ]
 
+[project.optional-dependencies]
+magika = [
+    "magika>=1.0.2",
+]
+test = [
+    "pytest>=8.0.0",
+]
+
 [[tool.uv.index]]
 url = "http://mirrors.aliyun.com/pypi/simple"
 name = "aliyun"

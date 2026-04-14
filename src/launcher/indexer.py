@@ -15,12 +15,14 @@ from PIL import Image
 import numpy as np
 from tqdm import tqdm
 import logging
+from src.launcher.file_type_detector import (
+    AutoFileTypeDetector,
+    FileTypeInfo,
+    IMAGE_EXTENSIONS,
+    TEXT_EXTENSIONS,
+)
 
 logger = logging.getLogger(__name__)
-
-# Supported file extensions
-TEXT_EXTENSIONS = {'.txt', '.md', '.py', '.js', '.java', '.cpp', '.c', '.h', '.cs', '.go', '.rs', '.json', '.yaml', '.yml', '.xml', '.html', '.css'}
-IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tiff', '.svg'}
 
 
 class FileIndexer:
@@ -129,7 +131,7 @@ class FileIndexer:
     QuantizedEmbedder : Memory-efficient quantized embedder
     """
     
-    def __init__(self, embedder, index_dir: str = ".file_launcher_index"):
+    def __init__(self, embedder, index_dir: str = ".file_launcher_index", file_type_detector=None):
         """
         Initialize the file indexer.
         
@@ -138,6 +140,7 @@ class FileIndexer:
             index_dir: Directory to store index files
         """
         self.embedder = embedder
+        self.file_type_detector = file_type_detector or AutoFileTypeDetector()
         self.index_dir = Path(index_dir)
         self.index_dir.mkdir(parents=True, exist_ok=True)
         
@@ -197,13 +200,17 @@ class FileIndexer:
         # Use modification time and size as a fast hash
         return hashlib.md5(f"{stat.st_mtime}_{stat.st_size}".encode()).hexdigest()
     
+    def _detect_file_type(self, file_path: Path) -> FileTypeInfo:
+        """Detect file type using the configured detector."""
+        return self.file_type_detector.detect(file_path)
+
     def _is_text_file(self, file_path: Path) -> bool:
         """Check if file is a text file."""
-        return file_path.suffix.lower() in TEXT_EXTENSIONS
+        return self._detect_file_type(file_path).launcher_type == "text"
     
     def _is_image_file(self, file_path: Path) -> bool:
         """Check if file is an image file."""
-        return file_path.suffix.lower() in IMAGE_EXTENSIONS
+        return self._detect_file_type(file_path).launcher_type == "image"
     
     def _read_text_file(self, file_path: Path, max_length: int = 5000) -> str:
         """Read text content from file."""
@@ -221,18 +228,25 @@ class FileIndexer:
             return text
         return text[:max_length] + "..."
     
-    def _create_file_input(self, file_path: Path) -> Optional[Dict[str, Any]]:
+    def _create_file_input(self, file_path: Path, file_type: Optional[FileTypeInfo] = None) -> Optional[Dict[str, Any]]:
         """
         Create input dictionary for the embedder based on file type.
         
         Returns:
             Dictionary with appropriate keys for the embedder, or None if unsupported
         """
-        if self._is_text_file(file_path):
+        file_type = file_type or self._detect_file_type(file_path)
+
+        if file_type.launcher_type == "text":
             content = self._read_text_file(file_path)
             if content:
-                return {"text": content}
-        elif self._is_image_file(file_path):
+                context_header = (
+                    f"File name: {file_path.name}\n"
+                    f"File type: {file_type.description}\n"
+                    f"MIME type: {file_type.mime_type}\n\n"
+                )
+                return {"text": context_header + content}
+        elif file_type.launcher_type == "image":
             return {"image": str(file_path.absolute())}
         
         return None
@@ -256,9 +270,13 @@ class FileIndexer:
         
         # Filter to supported files
         files_to_index = []
+        detected_file_types = {}
         for file_path in all_files:
-            if file_path.is_file() and (self._is_text_file(file_path) or self._is_image_file(file_path)):
-                files_to_index.append(file_path)
+            if file_path.is_file():
+                file_type = self._detect_file_type(file_path)
+                if file_type.is_supported:
+                    files_to_index.append(file_path)
+                    detected_file_types[file_path] = file_type
         
         logger.info(f"Found {len(files_to_index)} supported files to index")
         
@@ -293,7 +311,8 @@ class FileIndexer:
             batch_metadata = []
             
             for file_path, file_hash in batch:
-                file_input = self._create_file_input(file_path)
+                file_type = detected_file_types[file_path]
+                file_input = self._create_file_input(file_path, file_type)
                 if file_input:
                     batch_inputs.append(file_input)
                     
@@ -301,9 +320,10 @@ class FileIndexer:
                     metadata = {
                         "path": str(file_path.absolute()),
                         "name": file_path.name,
-                        "type": "text" if self._is_text_file(file_path) else "image",
+                        "type": file_type.launcher_type,
                         "hash": file_hash,
                         "size": file_path.stat().st_size,
+                        "file_type": file_type.to_metadata(),
                     }
                     
                     # Add preview for text files
