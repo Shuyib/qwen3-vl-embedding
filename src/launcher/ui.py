@@ -2,6 +2,7 @@
 Gradio UI for the multimodal file launcher.
 """
 import gradio as gr
+import html as html_lib
 from pathlib import Path
 from PIL import Image
 from typing import List, Dict, Any, Optional
@@ -55,6 +56,9 @@ class LauncherUI:
             file_type = result['type']
             file_path = result['path']
             file_name = result['name']
+            detected_type = result.get("file_type", {})
+            type_description = detected_type.get("description", file_type)
+            mime_type = detected_type.get("mime_type")
             
             # Color code by similarity
             if similarity_pct >= 70:
@@ -67,23 +71,25 @@ class LauncherUI:
             html += f"""
             <div style='margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 5px; background-color: #f9f9f9;'>
                 <div style='display: flex; justify-content: space-between; align-items: center;'>
-                    <h3 style='margin: 0 0 10px 0;'>{i}. {file_name}</h3>
+                    <h3 style='margin: 0 0 10px 0;'>{i}. {html_lib.escape(file_name)}</h3>
                     <span style='background-color: {color}; color: white; padding: 5px 10px; border-radius: 3px; font-weight: bold;'>
                         {similarity_pct:.1f}%
                     </span>
                 </div>
-                <p style='margin: 5px 0; color: #666;'><strong>Path:</strong> {file_path}</p>
-                <p style='margin: 5px 0; color: #666;'><strong>Type:</strong> {file_type}</p>
+                <p style='margin: 5px 0; color: #666;'><strong>Path:</strong> {html_lib.escape(file_path)}</p>
+                <p style='margin: 5px 0; color: #666;'><strong>Type:</strong> {html_lib.escape(type_description)}</p>
             """
+            if mime_type:
+                html += f"<p style='margin: 5px 0; color: #666;'><strong>MIME:</strong> {html_lib.escape(mime_type)}</p>"
             
             # Add preview for text files
             if file_type == "text" and "preview" in result:
-                preview = result["preview"].replace("\n", "<br>")
+                preview = html_lib.escape(result["preview"]).replace("\n", "<br>")
                 html += f"<p style='margin: 10px 0; padding: 10px; background-color: #fff; border-left: 3px solid #007bff;'>{preview}</p>"
             
             # Add image preview for image files
             if file_type == "image":
-                html += f"<img src='file={file_path}' style='max-width: 300px; max-height: 200px; margin-top: 10px; border-radius: 3px;' />"
+                html += f"<img src='file={html_lib.escape(file_path, quote=True)}' style='max-width: 300px; max-height: 200px; margin-top: 10px; border-radius: 3px;' />"
             
             html += "</div>"
         

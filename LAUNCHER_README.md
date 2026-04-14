@@ -25,6 +25,16 @@ Or update all dependencies:
 bash scripts/setup_environment.sh
 ```
 
+### Optional: Magika File Type Detection
+
+Install Magika if you want the launcher to detect file types from file content instead of relying only on file extensions:
+
+```bash
+uv pip install magika
+```
+
+With Magika available, `--file-type-detector auto` can index supported extensionless or misnamed files such as `Dockerfile`, shell scripts, source files, and configuration files. Magika is used for detection and metadata enrichment; rich document text extraction for formats like PDF or DOCX still requires a separate extractor.
+
 ### Download Models
 
 You can use either full-precision or quantized models:
@@ -57,6 +67,13 @@ First, index a directory containing files you want to search:
 **Using Full-Precision Model (supports images):**
 ```bash
 python launcher.py index /path/to/your/documents --model ./models/Qwen3-VL-Embedding-2B
+```
+
+**Using Magika for content-based file type detection:**
+```bash
+python launcher.py index /path/to/your/documents \
+    --model ./models/Qwen3-VL-Embedding-2B \
+    --file-type-detector magika
 ```
 
 **Using Quantized GGUF Model (text-only, memory efficient):**
@@ -124,10 +141,16 @@ python launcher.py index <directory> [options]
 Options:
   --no-recursive          Do not index subdirectories
   --index-dir DIR        Custom index directory (default: .file_launcher_index)
+  --file-type-detector   File type detection mode: auto, extension, or magika
   --model MODEL          Model name, path, or GGUF file (default: Qwen/Qwen3-VL-Embedding-2B)
   --device DEVICE        Device to use: cuda or cpu (default: auto-detect)
   --quantized            Use quantized GGUF model (auto-detected for .gguf files)
 ```
+
+File type detection modes:
+- `auto`: use Magika when installed; otherwise fall back to extension-based detection.
+- `extension`: use the launcher's built-in extension allow-list only.
+- `magika`: require Magika and fail fast if it is not installed.
 
 ### Launch Command
 
@@ -358,6 +381,7 @@ The multimodal file launcher consists of several integrated components working t
   - Text-only support (no images/videos)
 - **Batch Size**: Large directories are processed in batches automatically
 - **Incremental Updates**: Re-indexing only processes new or modified files
+- **File Type Detection**: Install Magika and use `--file-type-detector auto` to improve routing for extensionless or mislabeled files
 - **Model Selection**: 
   - Use quantized 2B model for fastest CPU inference
   - Use full 2B model for balanced performance with multimodal support

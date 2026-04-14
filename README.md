@@ -302,6 +302,7 @@ Search for files by describing their content in natural language or providing a 
 - **⌨️ Keyboard Shortcuts**: Global keyboard shortcut for instant access
 - **🖼️ Image Search**: Find similar images or related content
 - **⚡ Quantized Models**: Memory-efficient GGUF models for CPU inference
+- **🧠 File Type Detection**: Optional Magika integration for content-based type detection
 - **📁 Offline**: All indexing and search happens locally
 
 ### Quick Start
@@ -317,6 +318,14 @@ Search for files by describing their content in natural language or providing a 
    ```bash
    python launcher.py index ~/Documents \
        --model ./models/gguf/Qwen3-VL-Embedding-2B-Q4_K_M.gguf
+   ```
+
+   Optional: install Magika for content-based file type detection and richer indexed metadata:
+   ```bash
+   uv pip install magika
+   python launcher.py index ~/Documents \
+       --model ./models/gguf/Qwen3-VL-Embedding-2B-Q4_K_M.gguf \
+       --file-type-detector auto
    ```
 
 3. **Launch the search UI**:
