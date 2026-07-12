@@ -131,10 +131,12 @@ class QuantizedEmbedder:
             embedding=embedding,
             verbose=verbose
         )
+        self.supports_images = False
+        self.supports_videos = False
         
         # Get embedding dimension by creating a test embedding
         test_embed = self.model.create_embedding("test")
-        self.embed_dim = len(test_embed['data'][0]['embedding'])
+        self.embed_dim = self._normalize_embedding(test_embed['data'][0]['embedding']).shape[0]
         
         logger.info(f"Quantized model loaded. Embedding dimension: {self.embed_dim}")
     
@@ -174,6 +176,19 @@ class QuantizedEmbedder:
         if instruction:
             return f"{instruction}\n\n{text}"
         return text
+
+    def _normalize_embedding(self, embedding: Any) -> np.ndarray:
+        """Convert llama.cpp embedding output to one flat vector."""
+        embedding_array = np.asarray(embedding, dtype=np.float32)
+
+        if embedding_array.ndim == 1:
+            return embedding_array
+        if embedding_array.ndim == 2:
+            return embedding_array.mean(axis=0)
+        if embedding_array.ndim > 2:
+            return embedding_array.reshape(-1, embedding_array.shape[-1]).mean(axis=0)
+
+        raise ValueError("Embedding output must contain at least one dimension")
     
     def process(self, inputs: List[Dict[str, Any]]) -> np.ndarray:
         """
@@ -267,11 +282,14 @@ class QuantizedEmbedder:
             
             try:
                 result = self.model.create_embedding(text)
-                embedding = result['data'][0]['embedding']
+                embedding = self._normalize_embedding(result['data'][0]['embedding'])
                 embeddings.append(embedding)
             except Exception as e:
                 logger.error(f"Error creating embedding for text '{text[:50]}...': {e}")
                 # Skip failed embeddings rather than using zero vectors
                 continue
         
-        return np.array(embeddings, dtype=np.float32)
+        if not embeddings:
+            return np.empty((0, self.embed_dim), dtype=np.float32)
+
+        return np.vstack(embeddings).astype(np.float32, copy=False)

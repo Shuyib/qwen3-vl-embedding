@@ -13,6 +13,10 @@ class StubEmbedder:
         return np.ones((len(inputs), 3), dtype=np.float32)
 
 
+class TextOnlyStubEmbedder(StubEmbedder):
+    supports_images = False
+
+
 class StubDetector:
     def __init__(self, results):
         self.results = results
@@ -87,3 +91,41 @@ def test_indexer_skips_unsupported_detected_files(tmp_path):
 
     assert indexer.file_metadata == []
     assert embedder.inputs == []
+
+
+def test_indexer_skips_images_for_text_only_embedder(tmp_path):
+    document = tmp_path / "notes.md"
+    document.write_text("Launcher notes\n", encoding="utf-8")
+    image = tmp_path / "diagram.png"
+    image.write_bytes(b"fake image bytes")
+
+    embedder = TextOnlyStubEmbedder()
+    detector = StubDetector(
+        {
+            "notes.md": FileTypeInfo(
+                label="md",
+                description="Markdown text file",
+                mime_type="text/markdown",
+                group="text",
+                is_text=True,
+                launcher_type="text",
+                source="test",
+            ),
+            "diagram.png": FileTypeInfo(
+                label="png",
+                description="PNG image file",
+                mime_type="image/png",
+                group="image",
+                is_text=False,
+                launcher_type="image",
+                source="test",
+            ),
+        }
+    )
+    indexer = FileIndexer(embedder, tmp_path / "index", file_type_detector=detector)
+
+    indexer.index_directory(tmp_path, recursive=False)
+
+    assert [item["name"] for item in indexer.file_metadata] == ["notes.md"]
+    assert len(embedder.inputs) == 1
+    assert "text" in embedder.inputs[0]

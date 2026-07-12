@@ -41,14 +41,14 @@ You can use either full-precision or quantized models:
 
 **Full-Precision Models (Multimodal Support):**
 ```bash
-huggingface-cli download Qwen/Qwen3-VL-Embedding-2B --local-dir ./models/Qwen3-VL-Embedding-2B
+hf download Qwen/Qwen3-VL-Embedding-2B --local-dir ./models/Qwen3-VL-Embedding-2B
 ```
 
 **Quantized GGUF Models (Text-Only, Memory Efficient):**
 ```bash
 # Download quantized model (Q4_K_M is recommended for balance of size and quality)
-huggingface-cli download DevQuasar/Qwen.Qwen3-VL-Embedding-2B-GGUF \
-    Qwen3-VL-Embedding-2B-Q4_K_M.gguf \
+hf download DevQuasar/Qwen.Qwen3-VL-Embedding-2B-GGUF \
+    Qwen.Qwen3-VL-Embedding-2B.Q4_K_M.gguf \
     --local-dir ./models/gguf/
 ```
 
@@ -72,13 +72,13 @@ python launcher.py index /path/to/your/documents --model ./models/Qwen3-VL-Embed
 **Using Magika for content-based file type detection:**
 ```bash
 python launcher.py index /path/to/your/documents \
-    --model ./models/Qwen3-VL-Embedding-2B \
-    --file-type-detector magika
+    --model ./models/gguf/Qwen.Qwen3-VL-Embedding-2B.Q4_K_M.gguf \
+    --file-type-detector auto
 ```
 
 **Using Quantized GGUF Model (text-only, memory efficient):**
 ```bash
-python launcher.py index /path/to/your/documents --model ./models/gguf/Qwen3-VL-Embedding-2B-Q4_K_M.gguf --quantized
+python launcher.py index /path/to/your/documents --model ./models/gguf/Qwen.Qwen3-VL-Embedding-2B.Q4_K_M.gguf --quantized
 ```
 
 This will:
@@ -101,7 +101,7 @@ python launcher.py launch --model ./models/Qwen3-VL-Embedding-2B
 
 **Using Quantized GGUF Model (recommended for CPU):**
 ```bash
-python launcher.py launch --model ./models/gguf/Qwen3-VL-Embedding-2B-Q4_K_M.gguf --quantized --device cpu
+python launcher.py launch --model ./models/gguf/Qwen.Qwen3-VL-Embedding-2B.Q4_K_M.gguf --quantized --device cpu
 ```
 
 The UI will open in your browser at `http://localhost:7860`
@@ -112,10 +112,22 @@ The UI will open in your browser at `http://localhost:7860`
 - Enter a natural language description of what you're looking for
 - Example: "Python code for machine learning"
 - Example: "Configuration file with database settings"
+- Example: `how do I get reimbursed for a client visit` -> `travel_expenses.md`
+- Example: `site feels sluggish after a release` -> `incident_runbook.md`
+- Example: `employee cannot log into the private network` -> `access_requests.md`
 
 **Image Search Tab:**
 - Upload a reference image
 - Find similar images or related content
+
+These searches are covered by `tests/test_launcher_repository_examples.py`.
+The realistic examples intentionally use queries whose exact phrases are not in
+the target documents, which is the key distinction from plain Ctrl+F.
+
+Repository-oriented smoke examples covered by the same test:
+- `where are embeddings normalized` -> `quantized_embedder.py`
+- `indexer batch processing` -> `indexer.py`
+- `file type detector magika fallback` -> `file_type_detector.py`
 
 ## Keyboard Shortcut Mode
 

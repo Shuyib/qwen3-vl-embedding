@@ -247,7 +247,8 @@ class FileIndexer:
                 )
                 return {"text": context_header + content}
         elif file_type.launcher_type == "image":
-            return {"image": str(file_path.absolute())}
+            if getattr(self.embedder, "supports_images", True):
+                return {"image": str(file_path.absolute())}
         
         return None
     
@@ -341,6 +342,21 @@ class FileIndexer:
                     # Convert to numpy if it's a tensor
                     if hasattr(batch_embeddings, 'cpu'):
                         batch_embeddings = batch_embeddings.cpu().numpy()
+
+                    batch_embeddings = np.asarray(batch_embeddings, dtype=np.float32)
+                    if batch_embeddings.ndim == 1:
+                        batch_embeddings = batch_embeddings.reshape(1, -1)
+
+                    if batch_embeddings.shape[0] != len(batch_metadata):
+                        logger.error(
+                            "Skipping batch: embedder returned %s embeddings for %s files",
+                            batch_embeddings.shape[0],
+                            len(batch_metadata),
+                        )
+                        continue
+
+                    if batch_embeddings.shape[0] == 0:
+                        continue
                     
                     new_metadata.extend(batch_metadata)
                     new_embeddings.append(batch_embeddings)
