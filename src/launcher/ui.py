@@ -1,7 +1,26 @@
 """
 Gradio UI for the multimodal file launcher.
 """
-import gradio as gr
+import importlib.abc
+import sys
+
+
+class _PyArrowImportBlocker(importlib.abc.MetaPathFinder):
+    """Keep pandas from loading a crashing optional pyarrow extension."""
+
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname == "pyarrow" or fullname.startswith("pyarrow."):
+            raise ModuleNotFoundError("pyarrow disabled while importing Gradio")
+        return None
+
+
+_pyarrow_blocker = _PyArrowImportBlocker()
+sys.meta_path.insert(0, _pyarrow_blocker)
+try:
+    import gradio as gr
+finally:
+    sys.meta_path.remove(_pyarrow_blocker)
+
 import html as html_lib
 from pathlib import Path
 from PIL import Image
@@ -122,7 +141,7 @@ class LauncherUI:
     
     def create_interface(self) -> gr.Blocks:
         """Create and return the Gradio interface."""
-        with gr.Blocks(title="Multimodal File Launcher", theme=gr.themes.Soft()) as interface:
+        with gr.Blocks(title="Multimodal File Launcher") as interface:
             gr.Markdown("""
             # 🔍 Multimodal File Launcher
             
@@ -229,6 +248,7 @@ class LauncherUI:
         """
         interface = self.create_interface()
         interface.launch(
+            theme=gr.themes.Soft(),
             share=share,
             server_name=server_name,
             server_port=server_port,
