@@ -43,12 +43,38 @@ def run_unix_file_cmd(paths: list[Path], timeout: int = 60) -> dict[Path, str]:
     """Run `file --brief` on each path. Returns path -> description mapping."""
     if not paths:
         return {}
-    cmd = ["file", "--brief"] + [str(p) for p in paths]
-    try:
-        out = subprocess.check_output(cmd, timeout=timeout, text=True)
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        return {}
-    return {p: line.strip() for p, line in zip(paths, out.splitlines())}
+
+    results: dict[Path, str] = {}
+    batch: list[Path] = []
+    batch_chars = 0
+    max_batch_chars = 100_000
+
+    def flush_batch() -> bool:
+        nonlocal batch, batch_chars
+        if not batch:
+            return True
+
+        cmd = ["file", "--brief"] + [str(p) for p in batch]
+        try:
+            out = subprocess.check_output(cmd, timeout=timeout, text=True)
+        except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+            return False
+
+        results.update({p: line.strip() for p, line in zip(batch, out.splitlines())})
+        batch = []
+        batch_chars = 0
+        return True
+
+    for path in paths:
+        path_chars = len(str(path)) + 1
+        if batch and batch_chars + path_chars > max_batch_chars:
+            if not flush_batch():
+                return results
+        batch.append(path)
+        batch_chars += path_chars
+
+    flush_batch()
+    return results
 
 
 def print_section(title: str) -> None:
