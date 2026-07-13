@@ -129,6 +129,55 @@ Repository-oriented smoke examples covered by the same test:
 - `indexer batch processing` -> `indexer.py`
 - `file type detector magika fallback` -> `file_type_detector.py`
 
+## Launcher Tests And Benchmark
+
+Focused launcher tests:
+
+```bash
+./.venv/bin/python -m pytest \
+    tests/test_file_type_detector.py \
+    tests/test_indexer_file_types.py \
+    tests/test_quantized_embedder.py \
+    tests/test_launcher_repository_examples.py \
+    -v
+```
+
+Latest focused run: `12 passed in 0.22s`. This includes
+`test_image_reference_search_uses_multimodal_index_path`, which verifies that
+image reference search uses the multimodal index path.
+
+The image-search test creates three temporary 8x8 PNG fixtures at runtime:
+
+| File | Color | Purpose |
+|------|-------|---------|
+| `receipt_scan.png` | white `(255, 255, 255)` | Non-matching image candidate |
+| `architecture_diagram.png` | blue `(0, 0, 255)` | Reference image and expected top result |
+| `team_portrait.png` | red `(255, 0, 0)` | Non-matching image candidate |
+
+The test uses a deterministic stub embedder keyed from filenames, so it checks
+the launcher indexing and search path without requiring the full Qwen3-VL model
+or downloading external image data.
+
+File-detection benchmark command:
+
+```bash
+./.venv/bin/python benchmark_file_detection.py . --show-missed --compare-file-cmd --limit 20
+```
+
+Latest repo benchmark result:
+
+| Detector | Indexed | Text | Images | Time |
+|----------|---------|------|--------|------|
+| Extension-only | `26,339 / 37,883` (`69.5%`) | `26,225` | `114` | `611.7 ms` |
+| Magika content detection | `30,569 / 37,883` (`80.7%`) | `30,428` | `141` | `100.6 s` |
+| Unix `file` heuristic | N/A | `33,836` text-like | `121` image-like | `31.8 s` |
+
+Magika found `4,230` additional indexable files over extension-only detection
+(`+16.1%` relative to the extension baseline), with `0` files lost compared to
+the extension detector. The Unix `file` comparison found `8,139` text-like files
+that extension-only missed, while Magika found `306` files missed by the `file`
+heuristic.
+
 ## Keyboard Shortcut Mode
 
 Launch with a global keyboard shortcut (Ctrl+Alt+F by default):
