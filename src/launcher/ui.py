@@ -1,6 +1,7 @@
 """
 Gradio UI for the multimodal file launcher.
 """
+from contextlib import contextmanager
 import importlib.abc
 import sys
 
@@ -14,12 +15,24 @@ class _PyArrowImportBlocker(importlib.abc.MetaPathFinder):
         return None
 
 
-_pyarrow_blocker = _PyArrowImportBlocker()
-sys.meta_path.insert(0, _pyarrow_blocker)
-try:
+@contextmanager
+def _block_pyarrow_imports():
+    """Temporarily hide pyarrow while importing Gradio.
+
+    Some local pyarrow builds crash the interpreter when pandas probes optional
+    Arrow support during Gradio import. Gradio does not need pyarrow for this
+    launcher UI, so treat it as unavailable for the import only.
+    """
+    pyarrow_blocker = _PyArrowImportBlocker()
+    sys.meta_path.insert(0, pyarrow_blocker)
+    try:
+        yield
+    finally:
+        sys.meta_path.remove(pyarrow_blocker)
+
+
+with _block_pyarrow_imports():
     import gradio as gr
-finally:
-    sys.meta_path.remove(_pyarrow_blocker)
 
 import html as html_lib
 from pathlib import Path

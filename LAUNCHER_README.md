@@ -135,6 +135,7 @@ Focused launcher tests:
 
 ```bash
 ./.venv/bin/python -m pytest \
+    tests/test_launcher_ui.py \
     tests/test_file_type_detector.py \
     tests/test_indexer_file_types.py \
     tests/test_quantized_embedder.py \
@@ -142,9 +143,11 @@ Focused launcher tests:
     -v
 ```
 
-Latest focused run: `12 passed in 0.22s`. This includes
-`test_image_reference_search_uses_multimodal_index_path`, which verifies that
-image reference search uses the multimodal index path.
+Latest focused run: `14 passed in 2.86s`. This includes
+`test_launcher_ui_builds_interface_without_model_dependencies`, which verifies
+that the Gradio launcher UI can be built without loading the embedding model,
+and `test_image_reference_search_uses_multimodal_index_path`, which verifies
+that image reference search uses the multimodal index path.
 
 The image-search test creates three temporary 8x8 PNG fixtures at runtime:
 
@@ -449,6 +452,22 @@ The multimodal file launcher consists of several integrated components working t
   - Use 8B model for best accuracy (requires more GPU memory)
 
 ## Troubleshooting
+
+### Issue: Gradio crashes or exits while launching the UI
+
+Some local dependency combinations can crash during Gradio import when pandas
+probes optional `pyarrow` support. The launcher imports Gradio through
+`src/launcher/ui.py`, which temporarily treats `pyarrow` as unavailable during
+that import because the UI does not require Arrow support.
+
+If you see this class of failure, launch through the normal command instead of
+importing Gradio directly:
+
+```bash
+python launcher.py launch --model ./models/gguf/Qwen.Qwen3-VL-Embedding-2B.Q4_K_M.gguf --quantized --device cpu
+```
+
+The smoke coverage for this path lives in `tests/test_launcher_ui.py`.
 
 ### Issue: Global keyboard shortcut not working
 
