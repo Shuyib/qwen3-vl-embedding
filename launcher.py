@@ -135,14 +135,14 @@ def load_embedder(model_name_or_path: str, device: str, use_quantized: bool = Fa
         logger.info(f"Loading quantized GGUF model: {model_name_or_path}")
         try:
             from src.launcher.quantized_embedder import QuantizedEmbedder
-            
+
             # Determine GPU layers based on device
             n_gpu_layers = 35 if device == 'cuda' else 0
-            
+
             embedder = QuantizedEmbedder(
                 model_path=model_name_or_path,
                 n_gpu_layers=n_gpu_layers,
-                n_ctx=8192
+                n_ctx=8192,
             )
             logger.info("Quantized model loaded successfully")
             return embedder

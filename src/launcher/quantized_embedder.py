@@ -105,40 +105,50 @@ class QuantizedEmbedder:
     """
     
     def __init__(
-        self,
-        model_path: str,
-        n_ctx: int = 8192,
-        n_gpu_layers: int = 0,
-        embedding: bool = True,
-        verbose: bool = False
-    ):
-        if not LLAMA_CPP_AVAILABLE:
-            raise ImportError(
-                "llama-cpp-python is required for quantized models. "
-                "Install with: pip install llama-cpp-python"
+            self,
+            model_path: str,
+            n_ctx: int = 8192,
+            n_gpu_layers: int = 0,
+            embedding: bool = True,
+            verbose: bool = False,
+            pooling_type: Optional[int] = None,
+        ):
+            if not LLAMA_CPP_AVAILABLE:
+                raise ImportError(
+                    "llama-cpp-python is required for quantized models. "
+                    "Install with: pip install llama-cpp-python"
+                )
+
+            model_path = Path(model_path)
+            if not model_path.exists():
+                raise FileNotFoundError(f"Model file not found: {model_path}")
+
+            logger.info(f"Loading quantized model: {model_path}")
+
+            # Use native last-token pooling when available. The Qwen3-VL-Embedding
+            # model is designed for EOS-token pooling (matching the full-precision
+            # Qwen3VLEmbedder._pooling_last). Without this, llama-cpp returns
+            # per-token vectors and we have to pool manually.
+            kwargs = dict(
+                model_path=str(model_path),
+                n_ctx=n_ctx,
+                n_gpu_layers=n_gpu_layers,
+                embedding=embedding,
+                verbose=verbose,
             )
-        
-        model_path = Path(model_path)
-        if not model_path.exists():
-            raise FileNotFoundError(f"Model file not found: {model_path}")
-        
-        logger.info(f"Loading quantized model: {model_path}")
-        
-        self.model = Llama(
-            model_path=str(model_path),
-            n_ctx=n_ctx,
-            n_gpu_layers=n_gpu_layers,
-            embedding=embedding,
-            verbose=verbose
-        )
-        self.supports_images = False
-        self.supports_videos = False
-        
-        # Get embedding dimension by creating a test embedding
-        test_embed = self.model.create_embedding("test")
-        self.embed_dim = self._normalize_embedding(test_embed['data'][0]['embedding']).shape[0]
-        
-        logger.info(f"Quantized model loaded. Embedding dimension: {self.embed_dim}")
+            if pooling_type is not None:
+                kwargs["pooling_type"] = pooling_type
+
+            self.model = Llama(**kwargs)
+            self._pooling_type = pooling_type
+            self.supports_images = False
+            self.supports_videos = False
+
+            # Get embedding dimension by creating a test embedding
+            test_embed = self.model.create_embedding("test")
+            self.embed_dim = self._normalize_embedding(test_embed['data'][0]['embedding']).shape[0]
+
+            logger.info(f"Quantized model loaded. Embedding dimension: {self.embed_dim}")
     
     def _prepare_text_input(self, input_dict: Dict[str, Any]) -> str:
         """
@@ -178,12 +188,27 @@ class QuantizedEmbedder:
         return text
 
     def _normalize_embedding(self, embedding: Any) -> np.ndarray:
-        """Convert llama.cpp embedding output to one flat vector."""
+        """Convert llama.cpp embedding output to one flat vector.
+
+        Uses mean pooling across all tokens, which works well for GGUF models
+        loaded via llama-cpp's create_embedding() API. The full-precision
+        Qwen3VLEmbedder uses last-token pooling, but that relies on the chat
+        template being applied (which adds system instructions and [PROMPT_INJECTION]
+        markers). The create_embedding() API does not apply the chat template,
+        so the last token is just the final content token (e.g., a period or
+        newline), not a contextualized EOS embedding.
+
+        Mean pooling averages all tokens equally, producing more discriminative
+        embeddings. The trade-off is a mild short-text bias — very short files
+        (< 100 bytes) can rank higher than expected because their signal isn't
+        diluted by many tokens.
+        """
         embedding_array = np.asarray(embedding, dtype=np.float32)
 
         if embedding_array.ndim == 1:
             return embedding_array
         if embedding_array.ndim == 2:
+            # Mean pooling across all tokens
             return embedding_array.mean(axis=0)
         if embedding_array.ndim > 2:
             return embedding_array.reshape(-1, embedding_array.shape[-1]).mean(axis=0)
