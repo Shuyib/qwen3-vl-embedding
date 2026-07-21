@@ -6,6 +6,7 @@ import numpy as np
 import logging
 
 from PIL import Image
+from pathlib import Path
 from urllib.parse import urlparse
 from dataclasses import dataclass
 from typing import Optional, List, Union, Dict, Any
@@ -305,8 +306,9 @@ class Qwen3VLEmbedder():
             
             if isinstance(img, Image.Image):
                 image_content = img
-            elif isinstance(img, str):
-                image_content = img if img.startswith(('http://', 'https://')) else 'file://' + img
+            elif isinstance(img, (str, Path)):
+                image_content = str(img)
+                image_content = image_content if image_content.startswith(('http://', 'https://')) else 'file://' + image_content
             else:
                 raise TypeError(f"Unrecognized image type: {type(img)}")
 

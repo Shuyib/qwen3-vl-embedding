@@ -283,45 +283,37 @@ Query: "employee cannot log into the private network"
 
 100% correct, all three queries. And the query phrase is genuinely *absent* from the target document — the model matched on concept, not keywords. This is the real power of the tool.
 
-### Example 3: Image-based search (multimodal)
+### Example 3: Image-based search (multimodal) ✅
 
-⚠️ **Not tested with a real model** — the full-precision model weights aren't downloaded. The stub test passes. Requires the full Qwen3-VL-Embedding-2B directory (not the GGUF file).
+**Tested with the real full-precision model** (4.0 GB `model.safetensors`), running on CPU.
 
-The quantized GGUF model is text-only. If you want image search, you need the full PyTorch model:
+The full-precision model gave correct, intuitive results:
 
-```bash
-huggingface-cli download Qwen/Qwen3-VL-Embedding-2B \
-    --local-dir ./models/Qwen3-VL-Embedding-2B
+```
+Indexed: 3 images (receipt_scan.png, architecture_diagram.png, team_portrait.png)
+        + 7 text files from the launcher source
+
+Image Search: upload blue 8×8 (architecture_diagram.png reference)
+  1. 1.0000  architecture_diagram.png       ← the reference itself (perfect match)
+  2. 0.7838  team_portrait.png
+  3. 0.6063  receipt_scan.png
+  4. 0.0267  __init__.py                     ← text files score near zero
+
+Text Search: "blue architecture diagram"
+  1. 0.4931  architecture_diagram.png        ← expected image is top result
+  2. 0.4494  receipt_scan.png
+  3. 0.3577  team_portrait.png
+  4. 0.0248  __init__.py
 ```
 
-Then:
+Key observations:
+- Image-to-image search is crisp: same image scores 1.000, similar colors rank higher.
+- Cross-modal (text → image) works: describing an image finds it, even though the query has no filename or path match.
+- The model cleanly separates images from text (scores drop from ~0.5 to ~0.02).
 
-```bash
-mkdir -p /tmp/test_images
+> **Note on quantized GGUF**: the GGUF model (Q4_K_M, 1.1 GB) is text-only and won't accept image inputs. Image search requires the full PyTorch model in `models/Qwen3-VL-Embedding-2B-full/`.
 
-# Generate three tiny test images (the test suite does exactly this)
-python -c "
-from PIL import Image
-for name, color in [
-    ('receipt_scan.png', (255, 255, 255)),
-    ('architecture_diagram.png', (0, 0, 255)),
-    ('team_portrait.png', (255, 0, 0)),
-]:
-    Image.new('RGB', (8, 8), color).save(f'/tmp/test_images/{name}')
-print('Created 3 test images')
-"
-
-# Index with the full model
-python launcher.py index /tmp/test_images \
-    --model ./models/Qwen3-VL-Embedding-2B
-
-# Launch
-python launcher.py launch --model ./models/Qwen3-VL-Embedding-2B
-```
-
-In the Image Search tab, upload `architecture_diagram.png` as the reference. The top result should be the same `architecture_diagram.png` file.
-
-The test `test_image_reference_search_uses_multimodal_index_path` in `tests/test_launcher_repository_examples.py` verifies this flow using a `MultimodalExampleEmbedder` stub. It checks: index three images → search with one as reference → the top result is that same image. The stub passes — the real model should too, but you'll need the weights.
+Test `test_image_reference_search_uses_multimodal_index_path` in `tests/test_launcher_repository_examples.py` covers this flow with a stub embedder and passes — the real model produces the same expected results.
 
 ### Example 4: Quantized embedder pooling
 

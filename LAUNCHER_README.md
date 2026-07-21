@@ -41,7 +41,11 @@ You can use either full-precision or quantized models:
 
 **Full-Precision Models (Multimodal Support):**
 ```bash
+# Download official weights (creates ./models/Qwen3-VL-Embedding-2B/)
 hf download Qwen/Qwen3-VL-Embedding-2B --local-dir ./models/Qwen3-VL-Embedding-2B
+
+# Or use the pre-downloaded model at ./models/Qwen3-VL-Embedding-2B-full/
+# (this repo's copy — pass --model ./models/Qwen3-VL-Embedding-2B-full)
 ```
 
 **Quantized GGUF Models (Text-Only, Memory Efficient):**
